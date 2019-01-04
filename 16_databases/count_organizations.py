@@ -5,28 +5,31 @@
 
 import sqlite3
 
+def get_organizations(filename):
+	with open(filename) as file:
+		for line in file:
+			if not line.startswith('From: '): continue
+			words = line.split()
+			email = words[1]
+			org_pos = email.find('@')
+			yield email[org_pos + 1:]
+
+
 conn = sqlite3.connect('organizations.sqlite')
 cur = conn.cursor()
 
 cur.execute('DROP TABLE IF EXISTS Counts')
 cur.execute('CREATE TABLE Counts (org TEXT, count INTEGER)')
 
-with open('mbox.txt') as file:
-	for line in file:
-		if not line.startswith('From: '): continue
-		words = line.split()
-		email = words[1]
-		pos = email.find('@')
-		org = email[pos + 1:]
+for org in get_organizations('mbox.txt'):
+	cur.execute('SELECT count FROM Counts WHERE org = ?', (org,))
+	row = cur.fetchone()
+	if row:
+		cur.execute('UPDATE Counts SET count = count + 1 WHERE org = ?', (org,))
+	else:
+		cur.execute('INSERT INTO Counts (org, count) VALUES (?, 1)', (org,))
 
-		cur.execute('SELECT count FROM Counts WHERE org = ?', (org,))
-		row = cur.fetchone()
-		if row:
-			cur.execute('UPDATE Counts SET count = count + 1 WHERE org = ?', (org,))
-		else:
-			cur.execute('INSERT INTO Counts (org, count) VALUES (?, 1)', (org,))
-
-		conn.commit()
+	conn.commit()
 
 for row in cur.execute('SELECT org, count FROM Counts ORDER BY count DESC'):
 	print(str(row[0]), row[1])
